@@ -1,0 +1,38 @@
+name: Update Leaderboard Data
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 매일 UTC 03:00 (KST 12:00)
+  workflow_dispatch:       # 수동 실행 가능
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch data from W&B and update HTML
+        env:
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+          WANDB_ENTITY: horangi
+          WANDB_PROJECT: horangi4
+        run: python update_data.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet index.html && echo "No changes" && exit 0
+          git add index.html
+          git commit -m "chore: update leaderboard data $(date -u +%Y-%m-%d)"
+          git push
