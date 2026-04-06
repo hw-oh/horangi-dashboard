@@ -4,6 +4,7 @@
 import json
 import os
 import re
+from datetime import datetime, timezone, timedelta
 
 import wandb
 
@@ -197,6 +198,14 @@ def update_html(models: list[dict]) -> None:
     html = re.sub(
         r'(\d+) models',
         f'{count} models',
+        html,
+    )
+
+    kst = timezone(timedelta(hours=9))
+    updated = datetime.now(kst).strftime("%Y-%m-%d %H:%M KST")
+    html = re.sub(
+        r'UPDATED="[^"]*"',
+        f'UPDATED="{updated}"',
         html,
     )
 
