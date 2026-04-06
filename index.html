@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Horangi Korean LLM Leaderboard — Position Map</title>
+<meta name="description" content="Interactive position map for 81 Korean LLM models. GLP × ALT visualization with model family filtering.">
+<meta property="og:title" content="Horangi Korean LLM Leaderboard">
+<meta property="og:description" content="81개 한국어 LLM 모델의 GLP × ALT 포지션맵">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#fff;color:#1a1a1a;padding:16px 20px}
+@media(prefers-color-scheme:dark){body{background:#1a1a1a;color:#e8e6e0}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script>
+const{useState,useMemo,createElement:h}=React;
+
+const DATA=[{n:"gemini-3.1-pro",g:83.4,a:84.8,f:84.1,s:"API",fam:"Gemini"},{n:"gemini-3-pro",g:80.5,a:81.0,f:80.8,s:"API",fam:"Gemini"},{n:"claude-opus-4-6",g:80.3,a:80.0,f:80.1,s:"API",fam:"Claude"},{n:"gpt-5.4",g:81.9,a:77.5,f:79.7,s:"API",fam:"GPT"},{n:"claude-opus-4-5",g:76.0,a:78.9,f:77.5,s:"API",fam:"Claude"},{n:"gpt-5.2",g:77.8,a:76.3,f:77.0,s:"API",fam:"GPT"},{n:"gemma-4-31B-it",g:75.1,a:78.9,f:77.0,s:"M",fam:"Gemma 4"},{n:"qwen3.6-plus",g:76.2,a:76.4,f:76.3,s:"API",fam:"Qwen 3.5/3.6"},{n:"gemini-3-flash",g:71.3,a:81.2,f:76.2,s:"API",fam:"Gemini"},{n:"gpt-5.1",g:73.4,a:78.4,f:75.9,s:"API",fam:"GPT"},{n:"claude-opus-4-1",g:71.8,a:80.0,f:75.9,s:"API",fam:"Claude"},{n:"gpt-5.4-mini",g:75.6,a:75.9,f:75.7,s:"API",fam:"GPT"},{n:"gpt-5",g:73.1,a:78.0,f:75.5,s:"API",fam:"GPT"},{n:"claude-sonnet-4-6",g:75.7,a:75.0,f:75.3,s:"API",fam:"Claude"},{n:"glm-5-turbo",g:70.1,a:80.4,f:75.3,s:"API",fam:"GLM"},{n:"grok-4.20-beta",g:73.9,a:75.5,f:74.7,s:"API",fam:"Grok"},{n:"deepseek-v3.2",g:71.2,a:77.5,f:74.3,s:"L",fam:"DeepSeek"},{n:"glm-5",g:71.7,a:77.0,f:74.3,s:"L",fam:"GLM"},{n:"qwen3.5-397b-a17b",g:72.5,a:75.1,f:73.8,s:"L",fam:"Qwen 3.5/3.6"},{n:"claude-opus-4",g:67.6,a:79.6,f:73.6,s:"API",fam:"Claude"},{n:"kimi-k2.5",g:71.0,a:75.2,f:73.1,s:"API",fam:"Kimi"},{n:"claude-sonnet-4-5",g:70.1,a:75.4,f:72.8,s:"API",fam:"Claude"},{n:"qwen3.5-122b-a10b",g:72.0,a:73.3,f:72.6,s:"L",fam:"Qwen 3.5/3.6"},{n:"glm-4.7",g:66.4,a:77.7,f:72.1,s:"L",fam:"GLM"},{n:"grok-4-1-reasoning",g:67.4,a:76.6,f:72.0,s:"API",fam:"Grok"},{n:"gpt-5.4-nano",g:71.6,a:72.2,f:71.9,s:"API",fam:"GPT"},{n:"qwen3.5-27b",g:70.7,a:73.1,f:71.9,s:"M",fam:"Qwen 3.5/3.6"},{n:"grok-4-reasoning",g:66.0,a:76.5,f:71.2,s:"API",fam:"Grok"},{n:"gpt-5-mini",g:66.0,a:75.3,f:70.7,s:"API",fam:"GPT"},{n:"glm-5v-turbo",g:66.6,a:74.5,f:70.6,s:"API",fam:"GLM"},{n:"gemma-4-26B-A4B-it",g:66.2,a:74.5,f:70.3,s:"M",fam:"Gemma 4"},{n:"gemini-3.1-flash-lite",g:64.1,a:76.3,f:70.2,s:"API",fam:"Gemini"},{n:"qwen3-235b",g:66.4,a:73.2,f:69.8,s:"L",fam:"Qwen 3"},{n:"mimo-v2-pro",g:66.4,a:71.0,f:68.7,s:"API",fam:"MiMo"},{n:"qwen3.5-35b-a3b",g:68.0,a:68.9,f:68.4,s:"M",fam:"Qwen 3.5/3.6"},{n:"K-EXAONE-236B",g:63.5,a:71.7,f:67.6,s:"L",fam:"EXAONE"},{n:"solar-pro2",g:57.3,a:76.1,f:66.7,s:"API",fam:"Solar"},{n:"claude-haiku-4-5",g:59.9,a:73.1,f:66.5,s:"API",fam:"Claude"},{n:"gpt-5-nano",g:57.5,a:74.3,f:65.9,s:"API",fam:"GPT"},{n:"qwen3.5-9b",g:61.9,a:69.1,f:65.5,s:"S",fam:"Qwen 3.5/3.6"},{n:"A.X-K1",g:60.6,a:69.2,f:64.9,s:"L",fam:"A.X"},{n:"gpt-oss-120b",g:55.5,a:73.4,f:64.4,s:"L",fam:"GPT"},{n:"Solar-Open-100B",g:59.4,a:69.2,f:64.3,s:"L",fam:"Solar"},{n:"minimax-m2.7",g:65.4,a:63.1,f:64.2,s:"API",fam:"MiniMax"},{n:"minimax-m2.5",g:66.0,a:62.4,f:64.2,s:"API",fam:"MiniMax"},{n:"EXAONE-4.0.1-32B",g:58.2,a:69.9,f:64.0,s:"M",fam:"EXAONE"},{n:"HyperCLOVA-Think-32B",g:56.3,a:70.4,f:63.3,s:"M",fam:"HyperCLOVA"},{n:"Qwen3-32B",g:56.2,a:70.3,f:63.2,s:"M",fam:"Qwen 3"},{n:"mimo-v2-flash",g:64.5,a:61.7,f:63.1,s:"API",fam:"MiMo"},{n:"Qwen3-14B",g:54.5,a:71.3,f:62.9,s:"S",fam:"Qwen 3"},{n:"gemma-4-E4B-it",g:55.6,a:69.0,f:62.3,s:"S",fam:"Gemma 4"},{n:"EXAONE-4.0-32B",g:55.5,a:68.9,f:62.2,s:"M",fam:"EXAONE"},{n:"A.X-4.0",g:49.6,a:74.7,f:62.2,s:"L",fam:"A.X"},{n:"gpt-4o",g:51.9,a:70.6,f:61.3,s:"API",fam:"GPT"},{n:"glm-4.5-air",g:54.4,a:67.9,f:61.2,s:"L",fam:"GLM"},{n:"grok-4-1-non-r",g:47.7,a:73.0,f:60.3,s:"API",fam:"Grok"},{n:"VAETKI",g:49.6,a:70.1,f:59.9,s:"L",fam:"VAETKI"},{n:"Qwen3-8B",g:49.9,a:68.7,f:59.3,s:"S",fam:"Qwen 3"},{n:"grok-4-non-r",g:49.3,a:69.1,f:59.2,s:"API",fam:"Grok"},{n:"glm-4.7-flash",g:49.6,a:67.1,f:58.3,s:"M",fam:"GLM"},{n:"Qwen3-4B",g:48.5,a:66.5,f:57.5,s:"XS",fam:"Qwen 3"},{n:"kanana-2-think",g:47.5,a:66.9,f:57.2,s:"M",fam:"Kanana"},{n:"gemma-3-27b-it",g:42.2,a:71.2,f:56.7,s:"M",fam:"Gemma 3"},{n:"gemma-4-E2B-it",g:49.9,a:60.8,f:55.4,s:"S",fam:"Gemma 4"},{n:"Qwen3-4B-Inst",g:46.6,a:62.0,f:54.3,s:"XS",fam:"Qwen 3"},{n:"kanana-2-inst",g:43.3,a:64.2,f:53.8,s:"M",fam:"Kanana"},{n:"A.X-4.0-Light",g:40.6,a:63.9,f:52.3,s:"S",fam:"A.X"},{n:"gemma-3-12b-it",g:38.8,a:64.9,f:51.8,s:"S",fam:"Gemma 3"},{n:"EXAONE-3.5-32B",g:40.6,a:60.3,f:50.4,s:"M",fam:"EXAONE"},{n:"EXAONE-3.5-7.8B",g:38.3,a:61.8,f:50.0,s:"S",fam:"EXAONE"},{n:"Midm-2.0-Base",g:38.7,a:60.1,f:49.4,s:"S",fam:"Mi:dm"},{n:"Qwen3-1.7B",g:39.0,a:58.1,f:48.6,s:"XS",fam:"Qwen 3"},{n:"EXAONE-3.0-7.8B",g:34.1,a:56.9,f:45.5,s:"S",fam:"EXAONE"},{n:"kanana-2-thinking",g:38.1,a:51.7,f:44.9,s:"M",fam:"Kanana"},{n:"HyperCLOVA-Omni-8B",g:38.4,a:47.3,f:42.9,s:"S",fam:"HyperCLOVA"},{n:"gemma-3-4b-it",g:33.1,a:51.1,f:42.1,s:"XS",fam:"Gemma 3"},{n:"EXAONE-4.0-1.2B",g:40.1,a:43.3,f:41.7,s:"XS",fam:"EXAONE"},{n:"Qwen3-0.6B",g:27.3,a:54.0,f:40.7,s:"XS",fam:"Qwen 3"},{n:"Midm-2.0-Mini",g:28.3,a:51.6,f:39.9,s:"XS",fam:"Mi:dm"},{n:"gemma-3-1b-it",g:20.7,a:47.6,f:34.2,s:"XS",fam:"Gemma 3"},{n:"EXAONE-3.5-2.4B",g:24.8,a:31.6,f:28.2,s:"XS",fam:"EXAONE"},{n:"gemma-3-270m-it",g:12.6,a:34.6,f:23.6,s:"XS",fam:"Gemma 3"}];
+
+const SC={XS:"#B8A9E8",S:"#6BAED6",M:"#F0A040",L:"#E05040",API:"#A8A8A8"};
+const SR={XS:3.5,S:4.5,M:5.5,L:7,API:5};
+const REFS=[
+  {p:"gemini-3.1-pro",dx:6,dy:-5},{p:"gemini-3-flash",dx:-6,dy:-5},
+  {p:"gemini-3.1-flash-lite",dx:-6,dy:12},{p:"claude-opus-4-6",dx:6,dy:-5},
+  {p:"claude-sonnet-4-6",dx:6,dy:12},{p:"claude-haiku-4-5",dx:-6,dy:-5},
+  {p:"gpt-5.4",dx:6,dy:12,exact:true},{p:"gpt-5.4-mini",dx:6,dy:-5},
+  {p:"gpt-5.4-nano",dx:6,dy:12},
+  {p:"gemma-4-31B-it",dx:-6,dy:-5},{p:"gemma-4-26B-A4B-it",dx:-6,dy:-5},
+  {p:"gemma-4-E4B-it",dx:-6,dy:12},{p:"gemma-4-E2B-it",dx:-6,dy:12},
+];
+const matchRef=function(m){return REFS.some(function(r){return r.exact?m.n===r.p:m.n.startsWith(r.p)})};
+const findRef=function(m){return REFS.find(function(r){return r.exact?m.n===r.p:m.n.startsWith(r.p)})};
+const FC={"Gemini":"#1a7a3a","Claude":"#7B52D4","GPT":"#C85030","Gemma 4":"#E08820","Gemma 3":"#C8A060","Qwen 3.5/3.6":"#B07818","Qwen 3":"#C8A040","GLM":"#D04878","DeepSeek":"#2070A8","Grok":"#58A038","Kimi":"#8050C0","MiMo":"#C06080","MiniMax":"#A068A0","EXAONE":"#3888B8","Solar":"#D06828","HyperCLOVA":"#28A070","A.X":"#7060C0","VAETKI":"#808080","Kanana":"#B09038","Mi:dm":"#6898A8"};
+
+const W=720,H=680,P={t:16,r:16,b:44,l:44};
+const pw=W-P.l-P.r,ph=H-P.t-P.b;
+const xMn=10,xMx=90,yMn=26,yMx=92;
+const sx=function(g){return(g-xMn)/(xMx-xMn)*pw+P.l};
+const sy=function(a){return H-P.b-(a-yMn)/(yMx-yMn)*ph};
+function getTier(f){
+  if(f>=75)return{l:"Frontier",c:"#1a7a3a"};
+  if(f>=65)return{l:"Strong",c:"#2563a8"};
+  if(f>=55)return{l:"Competitive",c:"#a07018"};
+  return{l:"Emerging",c:"#888"};
+}
+
+function App(){
+  const[sel,setSel]=useState(null);
+  const[hov,setHov]=useState(null);
+  const[activeModels,setActiveModels]=useState(new Set());
+
+  var selectFamily=function(name){
+    if(sel===name){setSel(null);setActiveModels(new Set());return;}
+    setSel(name);
+    setActiveModels(new Set(DATA.filter(function(m){return m.fam===name}).map(function(m){return m.n})));
+  };
+  var toggleModel=function(name){
+    setActiveModels(function(prev){
+      var next=new Set(prev);
+      if(next.has(name))next.delete(name);else next.add(name);
+      return next;
+    });
+  };
+
+  var fams=useMemo(function(){
+    var m={};
+    DATA.forEach(function(d){if(!m[d.fam])m[d.fam]={cnt:0,best:0,ms:[]};m[d.fam].cnt++;m[d.fam].best=Math.max(m[d.fam].best,d.f);m[d.fam].ms.push(d);});
+    Object.values(m).forEach(function(v){v.ms.sort(function(a,b){return b.f-a.f})});
+    return Object.entries(m).sort(function(a,b){return b[1].best-a[1].best}).map(function(e){return{name:e[0],cnt:e[1].cnt,best:e[1].best,ms:e[1].ms}});
+  },[]);
+
+  var isHL=function(m){return sel&&m.fam===sel&&activeModels.has(m.n)};
+
+  var sorted=useMemo(function(){
+    return DATA.slice().sort(function(a,b){
+      var aH=sel&&a.fam===sel&&activeModels.has(a.n)?1:0;
+      var bH=sel&&b.fam===sel&&activeModels.has(b.n)?1:0;
+      if(aH!==bH)return aH-bH;
+      return a.f-b.f;
+    });
+  },[sel,activeModels]);
+
+  var labels=useMemo(function(){
+    var out=[];
+    if(sel){
+      DATA.filter(function(m){return m.fam===sel&&activeModels.has(m.n)}).forEach(function(m){
+        var r=findRef(m);
+        out.push({m:m,dx:r?r.dx:(m.g>60?-8:8),dy:r?r.dy:(m.a>70?12:-6),hl:true});
+      });
+      DATA.filter(function(m){return m.fam!==sel&&matchRef(m)}).forEach(function(m){
+        var r=findRef(m);out.push({m:m,dx:r.dx,dy:r.dy,hl:false});
+      });
+    } else {
+      DATA.filter(matchRef).forEach(function(m){var r=findRef(m);out.push({m:m,dx:r.dx,dy:r.dy,hl:false});});
+    }
+    return out;
+  },[sel,activeModels]);
+
+  var tierPolys=useMemo(function(){
+    var fills=[{th:75,prev:100,c:"rgba(160,210,150,0.3)"},{th:65,prev:75,c:"rgba(150,190,230,0.3)"},{th:55,prev:65,c:"rgba(235,215,140,0.3)"}];
+    return fills.map(function(f,i){
+      var pts="";
+      for(var x=xMn;x<=xMx;x+=0.5){var y=Math.min(Math.max(2*f.prev-x,yMn),yMx);pts+=sx(x)+","+sy(y)+" ";}
+      for(var x2=xMx;x2>=xMn;x2-=0.5){var y2=Math.min(Math.max(2*f.th-x2,yMn),yMx);pts+=sx(x2)+","+sy(y2)+" ";}
+      return h("polygon",{key:i,points:pts,fill:f.c});
+    });
+  },[]);
+
+  var isDark=typeof window!=='undefined'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;
+  var bg=isDark?"#2c2c2a":"#ffffff";
+  var border=isDark?"#555":"#ddd";
+  var txt=isDark?"#e8e6e0":"#1a1a1a";
+  var txt2=isDark?"#aaa":"#777";
+  var txt3=isDark?"#777":"#aaa";
+  var bgSec=isDark?"#333":"#f5f5f3";
+  var borderLight=isDark?"rgba(255,255,255,0.1)":"rgba(0,0,0,0.08)";
+  var borderMed=isDark?"rgba(255,255,255,0.15)":"rgba(0,0,0,0.12)";
+
+  var selFam=sel?fams.find(function(x){return x.name===sel}):null;
+
+  var tierLines=[75,65,55].map(function(th,i){
+    var pts="";for(var x=xMn;x<=xMx;x+=1){var y=2*th-x;if(y>=yMn&&y<=yMx)pts+=sx(x)+","+sy(y)+" ";}
+    return h("polyline",{key:i,points:pts,fill:"none",stroke:borderMed,strokeWidth:0.8,strokeDasharray:"5,4"});
+  });
+
+  var xTicks=[20,30,40,50,60,70,80].filter(function(v){return v>=xMn&&v<=xMx}).map(function(v){
+    return h("g",{key:"x"+v},
+      h("line",{x1:sx(v),y1:H-P.b,x2:sx(v),y2:P.t,stroke:borderLight,strokeWidth:0.3}),
+      h("text",{x:sx(v),y:H-P.b+14,textAnchor:"middle",fontSize:10,fill:txt3},v)
+    );
+  });
+  var yTicks=[30,40,50,60,70,80,90].filter(function(v){return v>=yMn&&v<=yMx}).map(function(v){
+    return h("g",{key:"y"+v},
+      h("line",{x1:P.l,y1:sy(v),x2:W-P.r,y2:sy(v),stroke:borderLight,strokeWidth:0.3}),
+      h("text",{x:P.l-6,y:sy(v)+3.5,textAnchor:"end",fontSize:10,fill:txt3},v)
+    );
+  });
+
+  var dots=sorted.map(function(m,i){
+    var hl=isHL(m);
+    var op=sel?(hl?0.9:0.12):0.6;
+    var r=SR[m.s]*(hl?1.8:1);
+    return h("circle",{key:i,cx:sx(m.g),cy:sy(m.a),r:r,
+      fill:SC[m.s],fillOpacity:op,
+      stroke:hl?"#111":"rgba(255,255,255,0.5)",strokeWidth:hl?2.2:0.4,
+      style:{cursor:"pointer"},
+      onMouseEnter:function(){setHov(m)},onMouseLeave:function(){setHov(null)},
+      onClick:function(){selectFamily(m.fam)}
+    });
+  });
+
+  var labelEls=labels.map(function(lb,i){
+    return h("text",{key:"lb"+i,x:sx(lb.m.g)+lb.dx,y:sy(lb.m.a)+lb.dy,
+      fontSize:lb.hl?10.5:8.5,fontWeight:lb.hl?600:400,
+      fill:lb.hl?txt:txt2,opacity:lb.hl?1:0.6,
+      textAnchor:lb.dx<0?"end":"start",style:{pointerEvents:"none"}
+    },lb.m.n);
+  });
+
+  var tooltip=null;
+  if(hov){
+    var bx=Math.min(Math.max(sx(hov.g)+14,4),W-192);
+    var by=Math.max(sy(hov.a)-56,4);
+    var t=getTier(hov.f);
+    tooltip=h("g",{style:{pointerEvents:"none"}},
+      h("rect",{x:bx,y:by,width:184,height:50,rx:8,fill:bg,stroke:border,strokeWidth:0.5}),
+      h("text",{x:bx+10,y:by+16,fontSize:11.5,fontWeight:600,fill:txt},hov.n),
+      h("text",{x:bx+10,y:by+30,fontSize:10,fill:txt2},"FINAL "+hov.f+" \u00b7 GLP "+hov.g+" \u00b7 ALT "+hov.a),
+      h("text",{x:bx+10,y:by+42,fontSize:10,fill:t.c},t.l+" \u00b7 "+hov.s+" \u00b7 "+hov.fam)
+    );
+  }
+
+  var famButtons=fams.map(function(f){
+    var on=sel===f.name;
+    return h("button",{key:f.name,onClick:function(){selectFamily(f.name)},
+      style:{padding:"5px 14px",borderRadius:99,fontSize:12,fontWeight:on?600:400,cursor:"pointer",border:"none",
+        background:on?(FC[f.name]||"#888"):bgSec,color:on?"#fff":txt2}
+    },f.name);
+  });
+
+  var sizeLabels=[{s:"XS",l:"<5B"},{s:"S",l:"5-15B"},{s:"M",l:"15-50B"},{s:"L",l:"50B+"},{s:"API",l:"API"}].map(function(x){
+    return h("div",{key:x.s,style:{display:"flex",alignItems:"center",gap:3,fontSize:11,color:txt3}},
+      h("div",{style:{width:8,height:8,borderRadius:"50%",background:SC[x.s],opacity:0.8}}),
+      x.l
+    );
+  });
+
+  var modelChips=null;
+  if(selFam){
+    var chips=selFam.ms.map(function(m){
+      var on=activeModels.has(m.n);
+      var t=getTier(m.f);
+      return h("button",{key:m.n,onClick:function(){toggleModel(m.n)},
+        onMouseEnter:function(){setHov(m)},onMouseLeave:function(){setHov(null)},
+        style:{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,cursor:"pointer",
+          border:on?"1.5px solid "+(FC[sel]||"#888"):"1.5px solid "+borderMed,
+          background:on?bg:"transparent",opacity:on?1:0.4}
+      },
+        h("div",{style:{width:7,height:7,borderRadius:"50%",background:SC[m.s],flexShrink:0}}),
+        h("span",{style:{fontSize:12,color:txt,whiteSpace:"nowrap"}},m.n),
+        h("span",{style:{fontSize:12,fontWeight:600,color:t.c,fontVariantNumeric:"tabular-nums"}},m.f)
+      );
+    });
+
+    modelChips=h("div",{style:{marginTop:16,padding:"12px 16px",borderRadius:12,background:bgSec}},
+      h("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:10}},
+        h("div",{style:{width:10,height:10,borderRadius:"50%",background:FC[sel]||"#888"}}),
+        h("span",{style:{fontSize:14,fontWeight:600,color:txt}},sel),
+        h("span",{style:{fontSize:12,color:txt3}},selFam.cnt+" models \u00b7 click to toggle")
+      ),
+      h("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},chips)
+    );
+  }
+
+  return h("div",null,
+    h("div",{style:{marginBottom:10}},
+      h("h2",{style:{margin:"0 0 2px",fontSize:17,fontWeight:600,color:txt}},"Horangi Korean LLM Leaderboard"),
+      h("span",{style:{fontSize:12,color:txt3}},"81 models \u00b7 GLP \u00d7 ALT \u00b7 click a family to highlight")
+    ),
+    h("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}},
+      h("button",{onClick:function(){setSel(null);setActiveModels(new Set())},
+        style:{padding:"5px 14px",borderRadius:99,fontSize:12,fontWeight:!sel?600:400,cursor:"pointer",border:"none",
+          background:!sel?txt:bgSec,color:!sel?bg:txt2}
+      },"All"),
+      famButtons
+    ),
+    h("svg",{viewBox:"0 0 "+W+" "+H,style:{width:"100%",maxWidth:720,height:"auto",display:"block"}},
+      tierPolys,
+      tierLines,
+      h("line",{x1:sx(yMn>xMn?yMn:xMn),y1:sy(yMn>xMn?yMn:xMn),x2:sx(Math.min(xMx,yMx)),y2:sy(Math.min(xMx,yMx)),stroke:borderLight,strokeWidth:0.4}),
+      xTicks,yTicks,
+      h("text",{x:W/2,y:H-2,textAnchor:"middle",fontSize:11,fill:txt3},"GLP (General Language Proficiency) \u2192"),
+      h("text",{x:10,y:H/2,textAnchor:"middle",fontSize:11,fill:txt3,transform:"rotate(-90,10,"+H/2+")"},"ALT (Alignment) \u2192"),
+      dots,labelEls,tooltip
+    ),
+    h("div",{style:{display:"flex",gap:14,justifyContent:"center",marginTop:4}},sizeLabels),
+    modelChips
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
