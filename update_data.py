@@ -135,6 +135,20 @@ def fetch_leaderboard_data() -> list[dict]:
             print(f"  Skipping {name}: missing scores")
             continue
 
+        GLP_KEYS = [
+            ("GLP_구문해석", "syn"), ("GLP_의미해석", "sem"), ("GLP_표현", "exp"),
+            ("GLP_정보검색", "ret"), ("GLP_일반적지식", "gen"), ("GLP_전문적지식", "spe"),
+            ("GLP_수학적추론", "mat"), ("GLP_논리적추론", "log"), ("GLP_추상적추론", "abs"),
+            ("GLP_함수호출", "fnc"), ("GLP_코딩능력", "cod"),
+        ]
+        ALT_KEYS = [
+            ("ALT_제어성", "ctl"), ("ALT_유해성방지", "tox"),
+            ("ALT_편향성방지", "bia"), ("ALT_윤리/도덕", "eth"),
+            ("ALT_환각방지", "hal"),
+        ]
+        gs = {short: round((s.get(wk) or 0) * 100, 1) for wk, short in GLP_KEYS}
+        als = {short: round((s.get(wk) or 0) * 100, 1) for wk, short in ALT_KEYS}
+
         models.append(
             {
                 "n": name,
@@ -143,6 +157,8 @@ def fetch_leaderboard_data() -> list[dict]:
                 "f": round(final * 100, 1),
                 "s": classify_size(name),
                 "fam": classify_family(name),
+                "gs": gs,
+                "as": als,
             }
         )
 
@@ -154,9 +170,11 @@ def fetch_leaderboard_data() -> list[dict]:
 def build_data_js(models: list[dict]) -> str:
     parts = []
     for m in models:
+        gs_str = json.dumps(m["gs"], separators=(",", ":"))
+        as_str = json.dumps(m["as"], separators=(",", ":"))
         parts.append(
-            '{n:"%s",g:%s,a:%s,f:%s,s:"%s",fam:"%s"}'
-            % (m["n"], m["g"], m["a"], m["f"], m["s"], m["fam"])
+            '{n:"%s",g:%s,a:%s,f:%s,s:"%s",fam:"%s",gs:%s,as:%s}'
+            % (m["n"], m["g"], m["a"], m["f"], m["s"], m["fam"], gs_str, as_str)
         )
     return "const DATA=[" + ",".join(parts) + "];"
 
