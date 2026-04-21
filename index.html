@@ -153,6 +153,7 @@ function FullDashboard(){
   const[activeModels,setActiveModels]=useState(new Set());
   const[showReg,setShowReg]=useState(true);
   const[showRadar,setShowRadar]=useState(true);
+  const[showChat,setShowChat]=useState(false);
   const[splitPct,setSplitPct]=useState(50);
   var containerRef=useRef(null);
   var dragging=useRef(false);
@@ -349,6 +350,183 @@ function FullDashboard(){
     );
   }
 
+  function buildSystemPrompt(){
+    var csv="name,FINAL,GLP,ALT,size,family,"+GLP_KO.join(",")+","+ALT_KO.join(",")+"\n";
+    DATA.forEach(function(m){
+      csv+=m.n+","+m.f+","+m.g+","+m.a+","+m.s+","+m.fam;
+      GLP_LABELS.forEach(function(k){csv+=","+(m.gs[k]||0)});
+      ALT_LABELS.forEach(function(k){csv+=","+(m.as[k]||0)});
+      csv+="\n";
+    });
+    var sel=activeList.length>0?"현재 사용자가 선택한 모델: "+activeList.map(function(m){return m.n}).join(", "):"선택된 모델 없음";
+    return "당신은 Horangi 한국어 LLM 리더보드 분석 전문가입니다. 아래 데이터를 기반으로 한국어로 분석해주세요.\n\n"+
+      "## 평가 체계\n"+
+      "- FINAL = (GLP+ALT)/2, GLP=범용언어성능(11개 하위항목 평균), ALT=가치정렬성능(5개 하위항목 평균)\n"+
+      "- GLP 하위: 구문해석, 의미해석, 표현, 정보검색, 일반적지식, 전문적지식, 수학적추론, 논리적추론, 추상적추론, 함수호출, 코딩능력\n"+
+      "- ALT 하위: 제어성, 유해성방지, 편향성방지, 윤리/도덕, 환각방지\n"+
+      "- Tier: Frontier(≥75), Strong(65-75), Competitive(55-65), Emerging(<55)\n"+
+      "- Size: XS(<5B), S(5-15B), M(15-50B), L(50B+), API(API전용)\n\n"+
+      "## "+sel+"\n\n"+
+      "## 전체 모델 데이터 ("+DATA.length+"개)\n```\n"+csv+"```\n\n"+
+      "답변 시 구체적 수치를 인용하고, 비교분석에는 표를 활용하세요. 간결하게 답변하세요.";
+  }
+
+  function ChatPanel(props){
+    var isDk=props.isDark,bg2=props.bg,brd=props.border,t=props.txt,t2=props.txt2,t3=props.txt3,bgS=props.bgSec,brdM=props.borderMed;
+    const[apiKey,setApiKey]=useState(function(){try{return localStorage.getItem("horangi_openai_key")||""}catch(e){return""}});
+    const[wandbKey,setWandbKey]=useState(function(){try{return localStorage.getItem("horangi_wandb_key")||""}catch(e){return""}});
+    const[serverUrl,setServerUrl]=useState(function(){try{return localStorage.getItem("horangi_server_url")||"http://localhost:8000"}catch(e){return"http://localhost:8000"}});
+    const[msgs,setMsgs]=useState([]);
+    const[input,setInput]=useState("");
+    const[loading,setLoading]=useState(false);
+    const[showSettings,setShowSettings]=useState(!apiKey);
+    const[useWeave,setUseWeave]=useState(false);
+    const[serverOk,setServerOk]=useState(false);
+    var msgsEndRef=useRef(null);
+
+    useEffect(function(){if(msgsEndRef.current)msgsEndRef.current.scrollIntoView({behavior:"smooth"})},[msgs]);
+
+    var save=function(k,v,setter){setter(v);try{localStorage.setItem(k,v)}catch(e){}};
+
+    useEffect(function(){
+      if(!useWeave)return;
+      fetch(serverUrl+"/docs",{method:"GET"}).then(function(){setServerOk(true)}).catch(function(){setServerOk(false)});
+    },[useWeave,serverUrl]);
+
+    function buildCsv(){
+      var csv="name,FINAL,GLP,ALT,size,family,"+GLP_KO.join(",")+","+ALT_KO.join(",")+"\n";
+      DATA.forEach(function(m){
+        csv+=m.n+","+m.f+","+m.g+","+m.a+","+m.s+","+m.fam;
+        GLP_LABELS.forEach(function(k){csv+=","+(m.gs[k]||0)});
+        ALT_LABELS.forEach(function(k){csv+=","+(m.as[k]||0)});
+        csv+="\n";
+      });
+      return csv;
+    }
+
+    var streamFromReader=function(reader,decoder){
+      var acc="";
+      setMsgs(function(p){return p.concat([{role:"assistant",content:""}])});
+      function read(){
+        reader.read().then(function(result){
+          if(result.done){setLoading(false);return;}
+          var chunk=decoder.decode(result.value,{stream:true});
+          chunk.split("\n").forEach(function(line){
+            if(!line.startsWith("data: "))return;
+            var d=line.slice(6).trim();
+            if(d==="[DONE]")return;
+            try{
+              var j=JSON.parse(d);
+              var delta=j.content||(j.choices&&j.choices[0].delta||{}).content||"";
+              if(delta){acc+=delta;var cur=acc;setMsgs(function(p){var n=p.slice();n[n.length-1]={role:"assistant",content:cur};return n})}
+            }catch(e){}
+          });
+          read();
+        });
+      }
+      read();
+    };
+
+    var sendMessage=function(text){
+      if(!text.trim()||!apiKey||loading)return;
+      var userMsg={role:"user",content:text};
+      var newMsgs=msgs.concat([userMsg]);
+      setMsgs(newMsgs);setInput("");setLoading(true);
+      var history=newMsgs.slice(-20).filter(function(m){return m.role==="user"||m.role==="assistant"});
+
+      if(useWeave&&serverOk){
+        fetch(serverUrl+"/chat",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({openai_api_key:apiKey,message:text,history:history.slice(0,-1),
+            leaderboard_csv:buildCsv(),selected_models:activeList.map(function(m){return m.n}),stream:true})
+        }).then(function(res){
+          if(!res.ok)return res.text().then(function(t){throw new Error(t)});
+          streamFromReader(res.body.getReader(),new TextDecoder());
+        }).catch(function(err){
+          setMsgs(function(p){return p.concat([{role:"assistant",content:"Server error: "+err.message}])});
+          setLoading(false);
+        });
+      }else{
+        var body={model:"gpt-5.4-mini",stream:true,messages:[{role:"system",content:buildSystemPrompt()}].concat(history)};
+        fetch("https://api.openai.com/v1/chat/completions",{
+          method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+apiKey},
+          body:JSON.stringify(body)
+        }).then(function(res){
+          if(!res.ok)return res.text().then(function(t){throw new Error(t)});
+          streamFromReader(res.body.getReader(),new TextDecoder());
+        }).catch(function(err){
+          setMsgs(function(p){return p.concat([{role:"assistant",content:"Error: "+err.message}])});
+          setLoading(false);
+        });
+      }
+    };
+
+    var examples=["Frontier 티어 모델들의 공통 강점은?","한국 모델 중 가장 성능이 좋은 모델은?","GLP와 ALT 점수 차이가 가장 큰 모델 top5는?","30B 이하 오픈소스 중 추천 모델은?"];
+
+    var msgEls=msgs.map(function(m,i){
+      var isUser=m.role==="user";
+      return h("div",{key:i,style:{display:"flex",justifyContent:isUser?"flex-end":"flex-start",marginBottom:6}},
+        h("div",{style:{maxWidth:"85%",padding:"8px 12px",borderRadius:12,fontSize:12,lineHeight:"1.5",whiteSpace:"pre-wrap",wordBreak:"break-word",
+          background:isUser?(isDk?"#404060":"#e8e4f8"):(isDk?"#333":"#f5f5f3"),
+          color:isUser?(isDk?"#e0e0ff":"#2a2050"):t}},m.content||"\u2026")
+      );
+    });
+
+    var inputStyle={width:"100%",padding:"5px 8px",borderRadius:6,border:"1px solid "+brdM,fontSize:11,background:isDk?"#2a2a2a":"#fff",color:t,outline:"none",marginBottom:4};
+
+    return h("div",{style:{display:"flex",flexDirection:"column",height:"100%",borderRadius:10,border:"1px solid "+brdM,overflow:"hidden",background:bg2}},
+      h("div",{style:{padding:"6px 12px",borderBottom:"1px solid "+brdM,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}},
+        h("div",{style:{display:"flex",alignItems:"center",gap:6}},
+          h("span",{style:{fontSize:12,fontWeight:600,color:t}},"\uD83D\uDCAC Analyst"),
+          useWeave?h("span",{style:{fontSize:9,padding:"1px 6px",borderRadius:4,background:serverOk?"#1a7a3a":"#c04030",color:"#fff"}},serverOk?"Weave \u2713":"Server \u2717"):null
+        ),
+        h("div",{style:{display:"flex",gap:4}},
+          h("button",{onClick:function(){setMsgs([])},style:{fontSize:9,cursor:"pointer",border:"none",background:"transparent",color:t3}},"Clear"),
+          h("button",{onClick:function(){setShowSettings(!showSettings)},style:{fontSize:9,cursor:"pointer",border:"none",background:"transparent",color:t3}},showSettings?"\u25B2":"\u2699")
+        )
+      ),
+      showSettings?h("div",{style:{padding:"6px 12px",borderBottom:"1px solid "+brdM,flexShrink:0}},
+        h("input",{type:"password",placeholder:"OpenAI API Key (required)",value:apiKey,
+          onChange:function(e){save("horangi_openai_key",e.target.value,setApiKey)},style:inputStyle}),
+        h("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:4}},
+          h("input",{type:"checkbox",checked:useWeave,onChange:function(){setUseWeave(!useWeave)},style:{cursor:"pointer"}}),
+          h("span",{style:{fontSize:10,color:t2}},"Weave Tracing")
+        ),
+        useWeave?h("div",null,
+          h("input",{type:"password",placeholder:"W&B API Key",value:wandbKey,
+            onChange:function(e){save("horangi_wandb_key",e.target.value,setWandbKey)},style:inputStyle}),
+          h("input",{type:"text",placeholder:"Server URL",value:serverUrl,
+            onChange:function(e){save("horangi_server_url",e.target.value,setServerUrl)},style:inputStyle}),
+          h("div",{style:{fontSize:9,color:t3}},"python chat_server.py \ub85c \uc11c\ubc84 \uc2e4\ud589 \ud544\uc694")
+        ):null
+      ):null,
+      h("div",{style:{flex:"1 1 0",overflowY:"auto",padding:"8px 12px",minHeight:0}},
+        msgs.length===0?h("div",{style:{display:"flex",flexDirection:"column",gap:5,marginTop:4}},
+          h("div",{style:{fontSize:10,color:t3,marginBottom:2}},"예시 질문:"),
+          examples.map(function(q,i){
+            return h("button",{key:i,onClick:function(){sendMessage(q)},
+              style:{textAlign:"left",padding:"7px 10px",borderRadius:8,border:"1px solid "+brdM,
+                background:"transparent",cursor:"pointer",fontSize:10,color:t2,lineHeight:"1.4"}
+            },q);
+          })
+        ):h("div",null,msgEls,h("div",{ref:msgsEndRef}))
+      ),
+      h("div",{style:{padding:"6px 12px",borderTop:"1px solid "+brdM,display:"flex",gap:6,flexShrink:0}},
+        h("input",{type:"text",value:input,placeholder:apiKey?"질문을 입력하세요...":"API Key\ub97c \uba3c\uc800 \uc785\ub825\ud558\uc138\uc694",
+          disabled:!apiKey||loading,
+          onChange:function(e){setInput(e.target.value)},
+          onKeyDown:function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage(input)}},
+          style:{flex:1,padding:"6px 10px",borderRadius:8,border:"1px solid "+brdM,fontSize:11,
+            background:isDk?"#2a2a2a":"#fff",color:t,outline:"none"}
+        }),
+        h("button",{onClick:function(){sendMessage(input)},disabled:!apiKey||loading||!input.trim(),
+          style:{padding:"6px 14px",borderRadius:8,border:"none",fontSize:11,cursor:"pointer",
+            background:loading?"#999":(isDk?"#6040a0":"#5030a0"),color:"#fff",opacity:(!apiKey||loading||!input.trim())?0.5:1}
+        },loading?"\u2026":"\u27A4")
+      )
+    );
+  }
+
   var cs={padding:"3px 5px",fontSize:10,textAlign:"right",fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"};
   var leaderboardRows=DATA.map(function(m,i){
     var on=activeModels.has(m.n);
@@ -429,7 +607,12 @@ function FullDashboard(){
         h("button",{onClick:downloadPng,
           style:{padding:"3px 10px",borderRadius:6,fontSize:10,cursor:"pointer",
             border:"1px solid "+borderMed,background:"transparent",color:txt2}
-        },"\u2b07 PNG")
+        },"\u2b07 PNG"),
+        h("button",{onClick:function(){setShowChat(!showChat)},
+          style:{padding:"3px 10px",borderRadius:6,fontSize:10,cursor:"pointer",
+            border:"1px solid "+borderMed,background:showChat?(isDark?"#302040":"#f0e8ff"):"transparent",
+            color:showChat?(isDark?"#b090e0":"#6040a0"):txt2}
+        },showChat?"\u2713 Chat":"Chat")
       )
     ),
     h("div",{style:{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}},
@@ -464,8 +647,8 @@ function FullDashboard(){
       },
         h("div",{style:{width:3,height:40,borderRadius:2,background:borderMed}})
       ),
-      h("div",{style:{width:(100-splitPct)+"%",minWidth:0,height:"100%",overflow:"hidden"}},
-        h("div",{style:{height:(showRadar&&activeList.length>0)?"58%":"100%",overflow:"hidden"}},
+      h("div",{style:{width:(100-splitPct)+"%",minWidth:0,height:"100%",overflow:"hidden",display:"flex",flexDirection:"column"}},
+        h("div",{style:{height:showChat?(showRadar&&activeList.length>0?"38%":"55%"):(showRadar&&activeList.length>0?"58%":"100%"),overflow:"hidden",flexShrink:0}},
           h("svg",{ref:function(el){window.__svgEl=el},viewBox:"0 0 "+W+" "+H,
             style:{width:"100%",height:"100%",display:"block"},preserveAspectRatio:"xMidYMid meet"},
             tierPolys,tierLines,xTicks,yTicks,
@@ -497,7 +680,7 @@ function FullDashboard(){
             )
           )
         ),
-        (showRadar&&activeList.length>0)?h("div",{style:{height:"42%",overflow:"hidden",display:"flex",flexDirection:"column"}},
+        (showRadar&&activeList.length>0)?h("div",{style:{height:showChat?"22%":"42%",overflow:"hidden",display:"flex",flexDirection:"column",flexShrink:0}},
           h("div",{style:{flex:"1 1 0",minHeight:0,display:"flex",gap:4}},
             h(RadarChart,{models:activeList,labels:GLP_LABELS,koLabels:GLP_KO,field:"gs",title:"GLP"}),
             h(RadarChart,{models:activeList,labels:ALT_LABELS,koLabels:ALT_KO,field:"as",title:"ALT"})
@@ -512,6 +695,9 @@ function FullDashboard(){
               );
             })
           )
+        ):null,
+        showChat?h("div",{style:{flex:"1 1 0",minHeight:0,marginTop:4}},
+          h(ChatPanel,{isDark:isDark,bg:bg,border:border,txt:txt,txt2:txt2,txt3:txt3,bgSec:bgSec,borderMed:borderMed})
         ):null
       )
     )

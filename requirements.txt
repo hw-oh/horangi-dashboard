@@ -1,1 +1,5 @@
 wandb>=0.19
+weave>=0.51
+openai>=1.0
+fastapi>=0.110
+uvicorn>=0.27
